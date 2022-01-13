@@ -20,81 +20,74 @@ import java.net.URI
 import java.time.Duration
 
 import scala.jdk.CollectionConverters.*
-import scala.util.Try
 import scala.util.Using
 import scala.util.Using.Releasable
 
 import io.github.bonigarcia.wdm.WebDriverManager
-import org.openqa.selenium.Alert
 import org.openqa.selenium.By
 import org.openqa.selenium.WebDriver
 import org.openqa.selenium.WebElement
 import org.openqa.selenium.chrome.ChromeDriver
-import org.openqa.selenium.support.ui.ExpectedCondition
 import org.openqa.selenium.support.ui.ExpectedConditions.*
 import org.openqa.selenium.support.ui.Wait
 import org.openqa.selenium.support.ui.WebDriverWait
 
 /**
- * Google searching.
+ * Want-to-know article searching.
  *
  * @author
  *   Chris de Vreeze
  */
-object Google:
+object WantToKnowArticles:
 
   // To understand Selenium better, see the WebDriver spec: https://w3c.github.io/webdriver
 
-  final class SearchHomePage(override val driver: WebDriver) extends PageApi.SearchHomePage, PageApi.Page(driver):
-    require(driver.getCurrentUrl.contains("google.com"), s"Not the google home page: ${driver.getCurrentUrl}")
+  // See http://makeseleniumeasy.com/2020/05/26/elementnotinteractableexception-element-not-interactable/ for some common problems
 
-    private val searchBoxLoc: By = By.name("q")
-    private val searchButtonLoc: By = By.name("btnK")
+  final class SearchHomePage(override val driver: WebDriver) extends PageApi.SearchHomePage, PageApi.Page(driver):
+    require(driver.getCurrentUrl.contains("wanttoknow.info"), s"Not the wanttoknow home page: ${driver.getCurrentUrl}")
+
+    private val searchBoxLoc: By = By.cssSelector("input#home-q")
+    private val searchLinkLoc: By = By.id("home-search-articles")
 
     def search(searchString: String): PageApi.SearchResultPage =
       val searchBox = driver.findElement(searchBoxLoc)
-      val searchButton = driver.findElement(searchButtonLoc)
+      // Element with CSS selector "input.search-submit" is not visible and can therefore not be interacted with
+      // We hit newline in the search box instead
 
       searchBox.clear()
       searchBox.sendKeys(searchString)
-      searchButton.click()
+      searchBox.sendKeys("\n")
+
+      val searchLink = newWait(driver).until(elementToBeClickable(searchLinkLoc))
+      searchLink.click()
 
       new SearchResultPage(driver)
     end search
 
   object SearchHomePage extends PageApi.PageLoader[SearchHomePage]:
 
-    val pageUri: URI = URI.create("https://www.google.com/")
-
-    private val popupLoc: By = By.cssSelector("div.dbsFrd")
-    private val okButtonLoc: By = By.cssSelector("button#L2AGLb")
+    val pageUri: URI = URI.create("https://www.wanttoknow.info/")
 
     def loadPage(driver: WebDriver): SearchHomePage =
       driver.get(pageUri.toString)
-      waitForAndAcceptPopup(driver)
+      Thread.sleep(1000)
       new SearchHomePage(driver)
-
-    private def waitForAndAcceptPopup(driver: WebDriver): Unit =
-      Try {
-        val popup = newWait(driver).until(visibilityOfElementLocated(popupLoc))
-        val okButton = newWait(driver).until(elementToBeClickable(okButtonLoc))
-        okButton.click()
-      }.getOrElse(println("No popup or unsuccessful handling of popup"))
 
   end SearchHomePage
 
   final class SearchResultPage(override val driver: WebDriver) extends PageApi.SearchResultPage, PageApi.Page(driver):
     val currentUrl: URI = URI.create(driver.getCurrentUrl)
     require(
-      currentUrl.getHost.contains("google.com") && currentUrl.getQuery.contains("q="),
-      s"Not a google search result page: $currentUrl")
+      currentUrl.getHost.contains("wanttoknow.info") && currentUrl.getQuery.contains("aq="),
+      s"Not a wanttoknow article search result page: $currentUrl")
 
-    private val resultLinkParentDivLoc: By = By.cssSelector("div.yuRUbf")
+    private val contentDivLoc: By = By.cssSelector("div.content")
 
     def getSearchResultUris: Seq[URI] =
-      val resultLinkParentDivs: Seq[WebElement] = driver.findElements(resultLinkParentDivLoc).asScala.toList
-      val resultLinks: Seq[WebElement] = resultLinkParentDivs.map(_.findElement(By.tagName("a")))
-      resultLinks.map(_.getAttribute("href")).map(URI.create)
+      val contentDiv: WebElement = driver.findElement(contentDivLoc)
+      val resultLinks: Seq[WebElement] = contentDiv.findElements(By.tagName("a")).asScala.toSeq
+      resultLinks.flatMap(link => Option(link.getAttribute("href"))).map(URI.create)
 
   end SearchResultPage
 
@@ -104,7 +97,7 @@ object Google:
     def release(r: WebDriver): Unit = r.quit()
 
   @main
-  def doGoogleSearch(searchString: String): Unit =
+  def doWantToKnowArticleSearch(searchString: String): Unit =
     WebDriverManager.chromedriver().setup()
 
     val resultURIs: Seq[URI] = Using.resource(new ChromeDriver()) { driver =>
@@ -114,10 +107,10 @@ object Google:
       searchResultPage.getSearchResultUris
     }
     resultURIs.foreach(println)
-  end doGoogleSearch
+  end doWantToKnowArticleSearch
 
   private def setTimeouts(driver: WebDriver): WebDriver =
     driver.manage().timeouts().implicitlyWait(Duration.ofSeconds(30)) // instead of default 0 sec
     driver
 
-end Google
+end WantToKnowArticles
