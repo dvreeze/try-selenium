@@ -28,3 +28,4 @@ it must be said that they satisfy different needs, so there is room for both of 
 .. _`Selenium documentation`: https://www.selenium.dev/documentation/
 .. _`W3C WebDriver standard`: https://www.w3.org/TR/webdriver/
 .. _`Selenium Grid 4`: https://www.selenium.dev/documentation/grid/
+.. _`Cypress`: https://www.cypress.io/
