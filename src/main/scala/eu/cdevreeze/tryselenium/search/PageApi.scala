@@ -23,6 +23,13 @@ import org.openqa.selenium.WebDriver
 /**
  * Purely abstract Page API.
  *
+ * Pages have (only) a WebDriver as state. Of course a Page constructor must make sure that
+ * the WebDriver state is consistent with the page.
+ *
+ * The public APIs of pages describe user actions, in "domain terms", understandable to business stakeholders.
+ * WebDriver methods are not visible in those public page APIs. Put differently, actions on the UI are not
+ * visible in those APIs.
+ *
  * @author
  *   Chris de Vreeze
  */

@@ -30,6 +30,7 @@ import org.openqa.selenium.TakesScreenshot
 import org.openqa.selenium.WebDriver
 import org.openqa.selenium.chrome.ChromeDriver
 import org.openqa.selenium.chrome.ChromeOptions
+import org.openqa.selenium.support.ThreadGuard
 import org.openqa.selenium.support.ui.Wait
 import org.openqa.selenium.support.ui.WebDriverWait
 
@@ -46,9 +47,14 @@ object WebDriverUtil:
     // Should block popups, but does not stop the consent window from popping up
     options.setExperimentalOption("excludeSwitches", java.util.Arrays.asList("disable-popup-blocking"))
     options.setPageLoadStrategy(PageLoadStrategy.NORMAL) // Is the default, but let's be explicit about this
-    new ChromeDriver(options)
+    // The driver can only be used from the same thread that created it
+    ThreadGuard.protect(new ChromeDriver(options))
 
   def setTimeouts(driver: WebDriver): WebDriver =
+    // Setting the implicitWait timeout to non-zero, combined with explicit waiting, is discouraged by Selenium.
+    // After all, it can cause unpredictable wait times.
+    // On the other hand, in practice we may need this, for example to get plenty of search results (without explicit wait).
+    // Also see https://octopus.com/blog/selenium/8-mixing-waits/mixing-waits.
     driver.manage().timeouts().implicitlyWait(Duration.ofSeconds(30)) // instead of default 0 sec
     driver
 

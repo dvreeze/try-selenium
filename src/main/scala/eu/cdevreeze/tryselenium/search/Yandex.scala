@@ -28,6 +28,7 @@ import eu.cdevreeze.tryselenium.internal.WebDriverUtil
 import eu.cdevreeze.tryselenium.internal.WebDriverUtil.given
 import io.github.bonigarcia.wdm.WebDriverManager
 import org.openqa.selenium.By
+import org.openqa.selenium.Keys
 import org.openqa.selenium.WebDriver
 import org.openqa.selenium.WebElement
 import org.openqa.selenium.support.ui.ExpectedConditions.*
@@ -52,7 +53,7 @@ object Yandex:
 
       searchBox.clear()
       searchBox.sendKeys(searchString)
-      searchBox.sendKeys("\n")
+      searchBox.sendKeys(Keys.ENTER)
 
       new SearchResultPage(driver)
     end search
@@ -88,7 +89,12 @@ object Yandex:
     private val resultDivLoc: By =
       By.cssSelector("div.Organic.organic.Typo.Typo_text_m.Typo_line_s.i-bem")
 
+    private val minExpectedResults = 7
+
     def getSearchResultUris: Seq[URI] =
+      Try {
+        WebDriverUtil.new10SecWait(driver).until(numberOfElementsToBeMoreThan(resultDivLoc, minExpectedResults))
+      }.getOrElse(())
       val resultDivs: Seq[WebElement] = driver.findElements(resultDivLoc).asScala.toList
       val resultLinks: Seq[WebElement] = resultDivs.flatMap(_.findElements(By.tagName("a")).asScala.headOption)
       resultLinks.map(_.getAttribute("href")).map(URI.create)
@@ -101,7 +107,7 @@ object Yandex:
 
     val resultURIs: Seq[URI] = Using.resource(WebDriverUtil.getChromeDriver) { driver =>
       try {
-        WebDriverUtil.setTimeouts(driver)
+        // Default timeouts, including implicit wait time of zero, to prevent interference with explicit waits
         val searchHomePage = SearchHomePage.loadPage(driver)
         val searchResultPage = searchHomePage.search(searchString)
         searchResultPage.getSearchResultUris

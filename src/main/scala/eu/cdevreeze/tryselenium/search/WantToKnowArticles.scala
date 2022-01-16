@@ -19,6 +19,7 @@ package eu.cdevreeze.tryselenium.search
 import java.net.URI
 
 import scala.jdk.CollectionConverters.*
+import scala.util.Try
 import scala.util.Using
 import scala.util.control.NonFatal
 
@@ -26,6 +27,7 @@ import eu.cdevreeze.tryselenium.internal.WebDriverUtil
 import eu.cdevreeze.tryselenium.internal.WebDriverUtil.given
 import io.github.bonigarcia.wdm.WebDriverManager
 import org.openqa.selenium.By
+import org.openqa.selenium.Keys
 import org.openqa.selenium.WebDriver
 import org.openqa.selenium.WebElement
 import org.openqa.selenium.support.ui.ExpectedConditions.*
@@ -55,7 +57,7 @@ object WantToKnowArticles:
 
       searchBox.clear()
       searchBox.sendKeys(searchString)
-      searchBox.sendKeys("\n")
+      searchBox.sendKeys(Keys.ENTER)
 
       val searchLink = WebDriverUtil.new10SecWait(driver).until(elementToBeClickable(searchLinkLoc))
       searchLink.click()
@@ -81,7 +83,13 @@ object WantToKnowArticles:
 
     private val contentDivLoc: By = By.cssSelector("div.content")
 
+    private val minExpectedResults = 7
+
     def getSearchResultUris: Seq[URI] =
+      Try {
+        WebDriverUtil.new10SecWait(driver)
+          .until(numberOfElementsToBeMoreThan(By.cssSelector("div.content a"), minExpectedResults))
+      }.getOrElse(())
       val contentDiv: WebElement = driver.findElement(contentDivLoc)
       val resultLinks: Seq[WebElement] = contentDiv.findElements(By.tagName("a")).asScala.toSeq
       resultLinks.flatMap(link => Option(link.getAttribute("href"))).map(URI.create)
@@ -94,7 +102,7 @@ object WantToKnowArticles:
 
     val resultURIs: Seq[URI] = Using.resource(WebDriverUtil.getChromeDriver) { driver =>
       try {
-        WebDriverUtil.setTimeouts(driver)
+        // Default timeouts, including implicit wait time of zero, to prevent interference with explicit waits
         val searchHomePage = SearchHomePage.loadPage(driver)
         val searchResultPage = searchHomePage.search(searchString)
         searchResultPage.getSearchResultUris

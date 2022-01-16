@@ -19,6 +19,7 @@ package eu.cdevreeze.tryselenium.search
 import java.net.URI
 
 import scala.jdk.CollectionConverters.*
+import scala.util.Try
 import scala.util.Using
 import scala.util.control.NonFatal
 
@@ -75,9 +76,14 @@ object DuckDuckGo:
 
     private val resultLinkLoc: By = By.cssSelector("a.js-result-title-link")
 
+    private val minExpectedResults = 7
+
     def getSearchResultUris: Seq[URI] =
+      Try {
+        WebDriverUtil.new10SecWait(driver).until(numberOfElementsToBeMoreThan(resultLinkLoc, minExpectedResults))
+      }.getOrElse(())
       val resultLinks: Seq[WebElement] = driver.findElements(resultLinkLoc).asScala.toList
-      resultLinks.map(_.getAttribute("href")).map(URI.create)
+      resultLinks.map(_.getAttribute("href")).map(URI.create).filterNot(_.getHost.contains("duckduckgo.com"))
 
   end SearchResultPage
 
@@ -87,7 +93,7 @@ object DuckDuckGo:
 
     val resultURIs: Seq[URI] = Using.resource(WebDriverUtil.getChromeDriver) { driver =>
       try {
-        WebDriverUtil.setTimeouts(driver)
+        // Default timeouts, including implicit wait time of zero, to prevent interference with explicit waits
         val searchHomePage = SearchHomePage.loadPage(driver)
         val searchResultPage = searchHomePage.search(searchString)
         searchResultPage.getSearchResultUris

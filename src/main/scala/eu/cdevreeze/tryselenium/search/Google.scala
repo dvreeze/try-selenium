@@ -28,6 +28,7 @@ import eu.cdevreeze.tryselenium.internal.WebDriverUtil.given
 import io.github.bonigarcia.wdm.WebDriverManager
 import org.openqa.selenium.Alert
 import org.openqa.selenium.By
+import org.openqa.selenium.Keys
 import org.openqa.selenium.WebDriver
 import org.openqa.selenium.WebElement
 import org.openqa.selenium.support.ui.ExpectedCondition
@@ -56,7 +57,7 @@ object Google:
 
       searchBox.clear()
       searchBox.sendKeys(searchString)
-      searchBox.sendKeys("\n")
+      searchBox.sendKeys(Keys.ENTER)
 
       new SearchResultPage(driver)
     end search
@@ -90,7 +91,12 @@ object Google:
 
     private val resultLinkParentDivLoc: By = By.cssSelector("div.yuRUbf")
 
+    private val minExpectedResults = 7
+
     def getSearchResultUris: Seq[URI] =
+      Try {
+        WebDriverUtil.new10SecWait(driver).until(numberOfElementsToBeMoreThan(resultLinkParentDivLoc, minExpectedResults))
+      }.getOrElse(())
       val resultLinkParentDivs: Seq[WebElement] = driver.findElements(resultLinkParentDivLoc).asScala.toList
       val resultLinks: Seq[WebElement] = resultLinkParentDivs.map(_.findElement(By.tagName("a")))
       resultLinks.map(_.getAttribute("href")).map(URI.create)
@@ -103,7 +109,7 @@ object Google:
 
     val resultURIs: Seq[URI] = Using.resource(WebDriverUtil.getChromeDriver) { driver =>
       try {
-        WebDriverUtil.setTimeouts(driver)
+        // Default timeouts, including implicit wait time of zero, to prevent interference with explicit waits
         val searchHomePage = SearchHomePage.loadPage(driver)
         val searchResultPage = searchHomePage.search(searchString)
         searchResultPage.getSearchResultUris

@@ -87,9 +87,15 @@ object Bing:
       currentUrl.getHost.contains("bing.com") && currentUrl.getPath.contains("search"),
       s"Not a bing search result page: $currentUrl")
 
+    private val resultBingLinkLoc: By = By.cssSelector("a.b_restorableLink")
     private val resultLiLoc: By = By.cssSelector("li.b_algo")
 
+    private val minExpectedResults = 7
+
     def getSearchResultUris: Seq[URI] =
+      Try {
+        WebDriverUtil.new10SecWait(driver).until(numberOfElementsToBeMoreThan(resultBingLinkLoc, minExpectedResults))
+      }.getOrElse(())
       val resultLis: Seq[WebElement] = driver.findElements(resultLiLoc).asScala.toList
       val resultLinks: Seq[WebElement] = resultLis.map(_.findElement(By.tagName("a")))
       resultLinks.map(_.getAttribute("href")).map(URI.create)
@@ -102,7 +108,7 @@ object Bing:
 
     val resultURIs: Seq[URI] = Using.resource(WebDriverUtil.getChromeDriver) { driver =>
       try {
-        WebDriverUtil.setTimeouts(driver)
+        // Default timeouts, including implicit wait time of zero, to prevent interference with explicit waits
         val searchHomePage = SearchHomePage.loadPage(driver)
         val searchResultPage = searchHomePage.search(searchString)
         searchResultPage.getSearchResultUris
