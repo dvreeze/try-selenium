@@ -19,7 +19,9 @@ package eu.cdevreeze.tryselenium.search
 import java.net.URI
 
 import scala.jdk.CollectionConverters.*
+import scala.util.Try
 import scala.util.Using
+import scala.util.chaining.*
 import scala.util.control.NonFatal
 
 import eu.cdevreeze.tryselenium.internal.WebDriverUtil
@@ -31,20 +33,20 @@ import org.openqa.selenium.WebElement
 import org.openqa.selenium.support.ui.ExpectedConditions.*
 
 /**
- * DuckDuckGo searching.
+ * Bing searching.
  *
  * @author
  *   Chris de Vreeze
  */
-object DuckDuckGo:
+object Bing:
 
   // To understand Selenium better, see the WebDriver spec: https://w3c.github.io/webdriver
 
   final class SearchHomePage(override val driver: WebDriver) extends PageApi.SearchHomePage, PageApi.Page(driver):
-    require(driver.getCurrentUrl.contains("duckduckgo.com"), s"Not the duckduckgo home page: ${driver.getCurrentUrl}")
+    require(driver.getCurrentUrl.contains("bing.com"), s"Not the bing search home page: ${driver.getCurrentUrl}")
 
-    private val searchBoxLoc: By = By.name("q")
-    private val searchButtonLoc: By = By.id("search_button_homepage")
+    private val searchBoxLoc: By = By.cssSelector("input[name = q]")
+    private val searchButtonLoc: By = By.cssSelector("label#search_icon")
 
     def search(searchString: String): PageApi.SearchResultPage =
       val searchBox = driver.findElement(searchBoxLoc)
@@ -59,30 +61,43 @@ object DuckDuckGo:
 
   object SearchHomePage extends PageApi.PageLoader[SearchHomePage]:
 
-    val pageUri: URI = URI.create("https://duckduckgo.com/")
+    val pageUri: URI = URI.create("https://www.bing.com/")
+
+    private val popupLoc: By = By.id("bnp_container")
+    private val okButtonLoc: By = By.id("bnp_btn_accept")
 
     def loadPage(driver: WebDriver): SearchHomePage =
       driver.get(pageUri.toString)
+      waitForAndAcceptPopup(driver)
       new SearchHomePage(driver)
+    end loadPage
+
+    private def waitForAndAcceptPopup(driver: WebDriver): Unit =
+      Try {
+        val popup = WebDriverUtil.new10SecWait(driver).until(visibilityOfElementLocated(popupLoc))
+        val okButton = WebDriverUtil.new10SecWait(driver).until(elementToBeClickable(okButtonLoc))
+        okButton.click()
+      }.getOrElse(println("No popup or unsuccessful handling of popup"))
 
   end SearchHomePage
 
   final class SearchResultPage(override val driver: WebDriver) extends PageApi.SearchResultPage, PageApi.Page(driver):
     val currentUrl: URI = URI.create(driver.getCurrentUrl)
     require(
-      currentUrl.getHost.contains("duckduckgo.com") && currentUrl.getQuery.contains("q="),
-      s"Not a duckduckgo search result page: $currentUrl")
+      currentUrl.getHost.contains("bing.com") && currentUrl.getPath.contains("search"),
+      s"Not a bing search result page: $currentUrl")
 
-    private val resultLinkLoc: By = By.cssSelector("a.js-result-title-link")
+    private val resultLiLoc: By = By.cssSelector("li.b_algo")
 
     def getSearchResultUris: Seq[URI] =
-      val resultLinks: Seq[WebElement] = driver.findElements(resultLinkLoc).asScala.toList
+      val resultLis: Seq[WebElement] = driver.findElements(resultLiLoc).asScala.toList
+      val resultLinks: Seq[WebElement] = resultLis.map(_.findElement(By.tagName("a")))
       resultLinks.map(_.getAttribute("href")).map(URI.create)
 
   end SearchResultPage
 
   @main
-  def doDuckDuckGoSearch(searchString: String): Unit =
+  def doBingSearch(searchString: String): Unit =
     WebDriverManager.chromedriver().setup()
 
     val resultURIs: Seq[URI] = Using.resource(WebDriverUtil.getChromeDriver) { driver =>
@@ -98,6 +113,6 @@ object DuckDuckGo:
       }
     }
     resultURIs.foreach(println)
-  end doDuckDuckGoSearch
+  end doBingSearch
 
-end DuckDuckGo
+end Bing

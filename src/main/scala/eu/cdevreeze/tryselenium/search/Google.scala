@@ -17,23 +17,21 @@
 package eu.cdevreeze.tryselenium.search
 
 import java.net.URI
-import java.time.Duration
 
 import scala.jdk.CollectionConverters.*
 import scala.util.Try
 import scala.util.Using
-import scala.util.Using.Releasable
+import scala.util.control.NonFatal
 
+import eu.cdevreeze.tryselenium.internal.WebDriverUtil
+import eu.cdevreeze.tryselenium.internal.WebDriverUtil.given
 import io.github.bonigarcia.wdm.WebDriverManager
 import org.openqa.selenium.Alert
 import org.openqa.selenium.By
 import org.openqa.selenium.WebDriver
 import org.openqa.selenium.WebElement
-import org.openqa.selenium.chrome.ChromeDriver
 import org.openqa.selenium.support.ui.ExpectedCondition
 import org.openqa.selenium.support.ui.ExpectedConditions.*
-import org.openqa.selenium.support.ui.Wait
-import org.openqa.selenium.support.ui.WebDriverWait
 
 /**
  * Google searching.
@@ -49,15 +47,16 @@ object Google:
     require(driver.getCurrentUrl.contains("google.com"), s"Not the google home page: ${driver.getCurrentUrl}")
 
     private val searchBoxLoc: By = By.name("q")
-    private val searchButtonLoc: By = By.name("btnK")
 
     def search(searchString: String): PageApi.SearchResultPage =
+      // Element with name "btnK" is not always visible and can therefore not always be interacted with
+      // We hit newline in the search box instead
+
       val searchBox = driver.findElement(searchBoxLoc)
-      val searchButton = driver.findElement(searchButtonLoc)
 
       searchBox.clear()
       searchBox.sendKeys(searchString)
-      searchButton.click()
+      searchBox.sendKeys("\n")
 
       new SearchResultPage(driver)
     end search
@@ -76,8 +75,8 @@ object Google:
 
     private def waitForAndAcceptPopup(driver: WebDriver): Unit =
       Try {
-        val popup = newWait(driver).until(visibilityOfElementLocated(popupLoc))
-        val okButton = newWait(driver).until(elementToBeClickable(okButtonLoc))
+        val popup = WebDriverUtil.new10SecWait(driver).until(visibilityOfElementLocated(popupLoc))
+        val okButton = WebDriverUtil.new10SecWait(driver).until(elementToBeClickable(okButtonLoc))
         okButton.click()
       }.getOrElse(println("No popup or unsuccessful handling of popup"))
 
@@ -98,26 +97,23 @@ object Google:
 
   end SearchResultPage
 
-  private def newWait(driver: WebDriver): Wait[WebDriver] = new WebDriverWait(driver, Duration.ofSeconds(5L))
-
-  private given Releasable[WebDriver] with
-    def release(r: WebDriver): Unit = r.quit()
-
   @main
   def doGoogleSearch(searchString: String): Unit =
     WebDriverManager.chromedriver().setup()
 
-    val resultURIs: Seq[URI] = Using.resource(new ChromeDriver()) { driver =>
-      setTimeouts(driver)
-      val searchHomePage = SearchHomePage.loadPage(driver)
-      val searchResultPage = searchHomePage.search(searchString)
-      searchResultPage.getSearchResultUris
+    val resultURIs: Seq[URI] = Using.resource(WebDriverUtil.getChromeDriver) { driver =>
+      try {
+        WebDriverUtil.setTimeouts(driver)
+        val searchHomePage = SearchHomePage.loadPage(driver)
+        val searchResultPage = searchHomePage.search(searchString)
+        searchResultPage.getSearchResultUris
+      } catch {
+        case NonFatal(e) =>
+          WebDriverUtil.takeDebuggingScreenshotPrintingPath(driver, e)
+          throw e
+      }
     }
     resultURIs.foreach(println)
   end doGoogleSearch
-
-  private def setTimeouts(driver: WebDriver): WebDriver =
-    driver.manage().timeouts().implicitlyWait(Duration.ofSeconds(30)) // instead of default 0 sec
-    driver
 
 end Google

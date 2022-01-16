@@ -17,20 +17,18 @@
 package eu.cdevreeze.tryselenium.search
 
 import java.net.URI
-import java.time.Duration
 
 import scala.jdk.CollectionConverters.*
 import scala.util.Using
-import scala.util.Using.Releasable
+import scala.util.control.NonFatal
 
+import eu.cdevreeze.tryselenium.internal.WebDriverUtil
+import eu.cdevreeze.tryselenium.internal.WebDriverUtil.given
 import io.github.bonigarcia.wdm.WebDriverManager
 import org.openqa.selenium.By
 import org.openqa.selenium.WebDriver
 import org.openqa.selenium.WebElement
-import org.openqa.selenium.chrome.ChromeDriver
 import org.openqa.selenium.support.ui.ExpectedConditions.*
-import org.openqa.selenium.support.ui.Wait
-import org.openqa.selenium.support.ui.WebDriverWait
 
 /**
  * Want-to-know searching.
@@ -59,7 +57,7 @@ object WantToKnow:
       searchBox.sendKeys(searchString)
       searchBox.sendKeys("\n")
 
-      val searchLink = newWait(driver).until(elementToBeClickable(searchLinkLoc))
+      val searchLink = WebDriverUtil.new10SecWait(driver).until(elementToBeClickable(searchLinkLoc))
       searchLink.click()
 
       new SearchResultPage(driver)
@@ -71,7 +69,6 @@ object WantToKnow:
 
     def loadPage(driver: WebDriver): SearchHomePage =
       driver.get(pageUri.toString)
-      Thread.sleep(1000)
       new SearchHomePage(driver)
 
   end SearchHomePage
@@ -91,26 +88,23 @@ object WantToKnow:
 
   end SearchResultPage
 
-  private def newWait(driver: WebDriver): Wait[WebDriver] = new WebDriverWait(driver, Duration.ofSeconds(5L))
-
-  private given Releasable[WebDriver] with
-    def release(r: WebDriver): Unit = r.quit()
-
   @main
   def doWantToKnowSearch(searchString: String): Unit =
     WebDriverManager.chromedriver().setup()
 
-    val resultURIs: Seq[URI] = Using.resource(new ChromeDriver()) { driver =>
-      setTimeouts(driver)
-      val searchHomePage = SearchHomePage.loadPage(driver)
-      val searchResultPage = searchHomePage.search(searchString)
-      searchResultPage.getSearchResultUris
+    val resultURIs: Seq[URI] = Using.resource(WebDriverUtil.getChromeDriver) { driver =>
+      try {
+        WebDriverUtil.setTimeouts(driver)
+        val searchHomePage = SearchHomePage.loadPage(driver)
+        val searchResultPage = searchHomePage.search(searchString)
+        searchResultPage.getSearchResultUris
+      } catch {
+        case NonFatal(e) =>
+          WebDriverUtil.takeDebuggingScreenshotPrintingPath(driver, e)
+          throw e
+      }
     }
     resultURIs.foreach(println)
   end doWantToKnowSearch
-
-  private def setTimeouts(driver: WebDriver): WebDriver =
-    driver.manage().timeouts().implicitlyWait(Duration.ofSeconds(30)) // instead of default 0 sec
-    driver
 
 end WantToKnow

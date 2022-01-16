@@ -19,7 +19,9 @@ package eu.cdevreeze.tryselenium.search
 import java.net.URI
 
 import scala.jdk.CollectionConverters.*
+import scala.util.Try
 import scala.util.Using
+import scala.util.chaining.*
 import scala.util.control.NonFatal
 
 import eu.cdevreeze.tryselenium.internal.WebDriverUtil
@@ -31,58 +33,70 @@ import org.openqa.selenium.WebElement
 import org.openqa.selenium.support.ui.ExpectedConditions.*
 
 /**
- * DuckDuckGo searching.
+ * Yandex searching.
  *
  * @author
- *   Chris de Vreeze
+ * Chris de Vreeze
  */
-object DuckDuckGo:
+object Yandex:
 
   // To understand Selenium better, see the WebDriver spec: https://w3c.github.io/webdriver
 
-  final class SearchHomePage(override val driver: WebDriver) extends PageApi.SearchHomePage, PageApi.Page(driver):
-    require(driver.getCurrentUrl.contains("duckduckgo.com"), s"Not the duckduckgo home page: ${driver.getCurrentUrl}")
+  final class SearchHomePage(override val driver: WebDriver) extends PageApi.SearchHomePage, PageApi.Page(driver) :
+    require(driver.getCurrentUrl.contains("yandex.com"), s"Not the yandex search home page: ${driver.getCurrentUrl}")
 
-    private val searchBoxLoc: By = By.name("q")
-    private val searchButtonLoc: By = By.id("search_button_homepage")
+    private val searchBoxLoc: By = By.cssSelector("input#text")
 
     def search(searchString: String): PageApi.SearchResultPage =
       val searchBox = driver.findElement(searchBoxLoc)
-      val searchButton = driver.findElement(searchButtonLoc)
 
       searchBox.clear()
       searchBox.sendKeys(searchString)
-      searchButton.click()
+      searchBox.sendKeys("\n")
 
       new SearchResultPage(driver)
     end search
 
-  object SearchHomePage extends PageApi.PageLoader[SearchHomePage]:
+  object SearchHomePage extends PageApi.PageLoader[SearchHomePage] :
 
-    val pageUri: URI = URI.create("https://duckduckgo.com/")
+    val pageUri: URI = URI.create("https://yandex.com/")
+
+    private val popupLoc: By = By.cssSelector("div.sc-iqAbSa.sc-crzoUp.bphZWB.iatwsz")
+    private val okButtonLoc: By = By.cssSelector("button.sc-pNWxx.sc-jrsJCI.dryRrI.bCOFvp")
 
     def loadPage(driver: WebDriver): SearchHomePage =
       driver.get(pageUri.toString)
+      waitForAndAcceptPopup(driver)
       new SearchHomePage(driver)
+    end loadPage
+
+    private def waitForAndAcceptPopup(driver: WebDriver): Unit =
+      Try {
+        val popup = WebDriverUtil.new10SecWait(driver).until(visibilityOfElementLocated(popupLoc))
+        val okButton = WebDriverUtil.new10SecWait(driver).until(elementToBeClickable(okButtonLoc))
+        okButton.click()
+      }.getOrElse(println("No popup or unsuccessful handling of popup"))
 
   end SearchHomePage
 
-  final class SearchResultPage(override val driver: WebDriver) extends PageApi.SearchResultPage, PageApi.Page(driver):
+  final class SearchResultPage(override val driver: WebDriver) extends PageApi.SearchResultPage, PageApi.Page(driver) :
     val currentUrl: URI = URI.create(driver.getCurrentUrl)
     require(
-      currentUrl.getHost.contains("duckduckgo.com") && currentUrl.getQuery.contains("q="),
-      s"Not a duckduckgo search result page: $currentUrl")
+      currentUrl.getHost.contains("yandex.com") && currentUrl.getPath.contains("search"),
+      s"Not a yandex search result page: $currentUrl")
 
-    private val resultLinkLoc: By = By.cssSelector("a.js-result-title-link")
+    private val resultDivLoc: By =
+      By.cssSelector("div.Organic.organic.Typo.Typo_text_m.Typo_line_s.i-bem")
 
     def getSearchResultUris: Seq[URI] =
-      val resultLinks: Seq[WebElement] = driver.findElements(resultLinkLoc).asScala.toList
+      val resultDivs: Seq[WebElement] = driver.findElements(resultDivLoc).asScala.toList
+      val resultLinks: Seq[WebElement] = resultDivs.flatMap(_.findElements(By.tagName("a")).asScala.headOption)
       resultLinks.map(_.getAttribute("href")).map(URI.create)
 
   end SearchResultPage
 
   @main
-  def doDuckDuckGoSearch(searchString: String): Unit =
+  def doYandexSearch(searchString: String): Unit =
     WebDriverManager.chromedriver().setup()
 
     val resultURIs: Seq[URI] = Using.resource(WebDriverUtil.getChromeDriver) { driver =>
@@ -98,6 +112,6 @@ object DuckDuckGo:
       }
     }
     resultURIs.foreach(println)
-  end doDuckDuckGoSearch
+  end doYandexSearch
 
-end DuckDuckGo
+end Yandex
